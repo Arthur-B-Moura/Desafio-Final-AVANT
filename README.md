@@ -40,5 +40,7 @@ Caso deseje executar o *pkg* de teste, basta apenas trocar `gancho_pkg` por `gan
 - O algoritmo envia mensagens de <ins>status</ins> a cada 2s, também do tipo `String()`, no tópico `'/gancho/status'`, de forma que *msg.data* será:
    
   -> **"waiting"** - node em execução, ainda não recebeu mensagem de drone centralizado.
+
   -> **"preparing"** - recebeu mensagem de drone centralizado, mas ainda não realizou as operações para soltar o gancho.
+  
   -> **"released"** - gancho já foi solto, procedimento do algorítmo foi finalizado.
