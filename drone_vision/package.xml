@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="3">
+    <name> drone_vision </name>
+    <version> 0.0.1 </version>
+    <description>
+        Pacote de visão computacional para detecção de linha azul e mangueira vermelha.
+    </description>
+
+    <!-- Dependências de execução -->
+    <exec_depend> rclpy         </exec_depend>
+    <exec_depend> sensor_msgs   </exec_depend>
+    <exec_depend> cv_bridge     </exec_depend>
+    <exec_depend> std_msgs      </exec_depend>
+    <exec_depend> geometry_msgs </exec_depend>
+    
+    <!-- Python packages (instalados via pip) -->
+    <!-- opencv-python e numpy são instalados no ambiente Python -->
+
+    <!-- Dependência do sistema de build para pacotes Python -->
+    <buildtool_depend> ament_python </buildtool_depend>
+
+    <!-- Para testes -->
+    <test_depend> ament_copyright </test_depend>
+    <test_depend> ament_flake8    </test_depend>
+    <test_depend> ament_pep257    </test_depend>
+    <test_depend> python3-pytest  </test_depend>
+
+    <export>
+        <build_type> ament_python </build_type>
+    </export>
+</package>
