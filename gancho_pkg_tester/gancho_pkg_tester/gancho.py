@@ -11,6 +11,22 @@ da Jetson para evitar problemas. Possibilita o teste da comunicação ROS, uma v
 padrão do nó original
 """
 
+"""
+Subscriber
+- Tópico: '/gancho/posicao_drone'
+    -> mensagem String() 
+    -> Mensagem avisando que drone esta centralizado
+    -> msg.data esperado = 'Drone centralizado'
+
+Publisher
+- Topico: '/gancho/status'
+    -> mensagem String()
+    -> mensagem com updates do status do gancho
+    -> msg.data esperados:
+        >> 'waiting'   --> aguardando drone centralizado
+        >> 'preparing' --> recebida mensagem de drone centralizado, mas ganchho ainda não foi solto
+        >> 'released'  --> gancho foi solto, drone pode deixar a posição e terminar a missão
+"""
 
 # -------------------- #
 #   SETUP NODE ROS2    #
