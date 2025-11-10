@@ -7,6 +7,24 @@ from std_msgs.msg import String # Mensagens do topico gancho serão do tipo stri
 import Jetson.GPIO as GPIO 
 
 
+"""
+Subscriber
+- Tópico: '/gancho/posicao_drone'
+    -> mensagem String() 
+    -> Mensagem avisando que drone esta centralizado
+    -> msg.data esperado = 'Drone centralizado'
+
+Publisher
+- Topico: '/gancho/status'
+    -> mensagem String()
+    -> mensagem com updates do status do gancho
+    -> msg.data esperados:
+        >> 'waiting'   --> aguardando drone centralizado
+        >> 'preparing' --> recebida mensagem de drone centralizado, mas ganchho ainda não foi solto
+        >> 'released'  --> gancho foi solto, drone pode deixar a posição e terminar a missão
+"""
+
+
 # --------------------- #
 #   SETUP PINO JETSON   #
 # --------------------- #
