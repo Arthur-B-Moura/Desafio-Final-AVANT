@@ -1,0 +1,20 @@
+running egg_info
+writing ../../build/drone_navigation/drone_navigation.egg-info/PKG-INFO
+writing dependency_links to ../../build/drone_navigation/drone_navigation.egg-info/dependency_links.txt
+writing entry points to ../../build/drone_navigation/drone_navigation.egg-info/entry_points.txt
+writing requirements to ../../build/drone_navigation/drone_navigation.egg-info/requires.txt
+writing top-level names to ../../build/drone_navigation/drone_navigation.egg-info/top_level.txt
+reading manifest file '../../build/drone_navigation/drone_navigation.egg-info/SOURCES.txt'
+writing manifest file '../../build/drone_navigation/drone_navigation.egg-info/SOURCES.txt'
+running build
+running build_py
+running install
+running install_lib
+running install_data
+copying package.xml -> /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/share/drone_navigation
+running install_egg_info
+removing '/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone_navigation-0.0.0-py3.10.egg-info' (and everything under it)
+Copying ../../build/drone_navigation/drone_navigation.egg-info to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone_navigation-0.0.0-py3.10.egg-info
+running install_scripts
+Installing navigator script to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/drone_navigation
+writing list of installed files to '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/install.log'

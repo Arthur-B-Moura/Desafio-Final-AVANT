@@ -1,1 +1,1 @@
-setuptools
+geometry_msgs:mavros_msgs:rclpy:std_msgs

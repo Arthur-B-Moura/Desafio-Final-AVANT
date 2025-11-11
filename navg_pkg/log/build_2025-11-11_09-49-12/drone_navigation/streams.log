@@ -1,0 +1,22 @@
+[0.528s] Invoking command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/src/drone_navigation': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_navigation build --build-base /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build install --record /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/install.log --single-version-externally-managed install_data
+[0.708s] running egg_info
+[0.709s] writing ../../build/drone_navigation/drone_navigation.egg-info/PKG-INFO
+[0.709s] writing dependency_links to ../../build/drone_navigation/drone_navigation.egg-info/dependency_links.txt
+[0.709s] writing entry points to ../../build/drone_navigation/drone_navigation.egg-info/entry_points.txt
+[0.709s] writing requirements to ../../build/drone_navigation/drone_navigation.egg-info/requires.txt
+[0.709s] writing top-level names to ../../build/drone_navigation/drone_navigation.egg-info/top_level.txt
+[0.711s] reading manifest file '../../build/drone_navigation/drone_navigation.egg-info/SOURCES.txt'
+[0.711s] writing manifest file '../../build/drone_navigation/drone_navigation.egg-info/SOURCES.txt'
+[0.711s] running build
+[0.711s] running build_py
+[0.712s] running install
+[0.712s] running install_lib
+[0.713s] running install_data
+[0.713s] copying package.xml -> /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/share/drone_navigation
+[0.713s] running install_egg_info
+[0.714s] removing '/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone_navigation-0.0.0-py3.10.egg-info' (and everything under it)
+[0.715s] Copying ../../build/drone_navigation/drone_navigation.egg-info to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone_navigation-0.0.0-py3.10.egg-info
+[0.716s] running install_scripts
+[0.734s] Installing navigator script to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/drone_navigation
+[0.734s] writing list of installed files to '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/install.log'
+[0.765s] Invoked command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/src/drone_navigation' returned '0': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_navigation build --build-base /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build install --record /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/install.log --single-version-externally-managed install_data
