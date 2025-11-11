@@ -10,12 +10,8 @@ setup.py
 ../../build/drone_navigation/drone_navigation.egg-info/zip-safe
 drone_navigation/__init__.py
 drone_navigation/navigator.py
-drone_navigation.egg-info/PKG-INFO
-drone_navigation.egg-info/SOURCES.txt
-drone_navigation.egg-info/dependency_links.txt
-drone_navigation.egg-info/entry_points.txt
-drone_navigation.egg-info/requires.txt
-drone_navigation.egg-info/top_level.txt
-drone_navigation.egg-info/zip-safe
 launch/mission_launch.py
 resource/drone_navigation
+test/test_copyright.py
+test/test_flake8.py
+test/test_pep257.py

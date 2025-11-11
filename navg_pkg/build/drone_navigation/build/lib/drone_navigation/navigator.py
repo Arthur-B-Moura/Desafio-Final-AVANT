@@ -1,341 +1,416 @@
 #!/usr/bin/env python3
+import math
+from typing import Optional
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from rclpy.callback_groups import ReentrantCallbackGroup
-import time
-import math
 
-# Mensagens ROS
-from std_msgs.msg import String, Int32MultiArray, Bool
+from std_msgs.msg import String, Int32MultiArray
+from geometry_msgs.msg import PoseStamped, Twist
 from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode, CommandTOL
-from geometry_msgs.msg import PoseStamped, Twist
 
 
 class NavigatorNode(Node):
     """
-    Nó principal de navegação que integra a visão e o controle do gancho.
-    Controla o drone com base em uma máquina de estados.
+    Nó principal de navegação (ROS 2) que integra visão e gancho para a missão.
+    Implementa uma máquina de estados não-bloqueante com chamadas de serviço assíncronas.
     """
 
     def __init__(self):
-        super().__init__('navigator_node')
+        super().__init__("navigator_node")
 
-        # --- Parâmetros ---
-        self.declare_parameter('altitude_cruzeiro', 3.0)
-        self.declare_parameter('ganho_p_linear', 0.005)  # Ganho Proporcional para velocidade linear
-        self.declare_parameter('ganho_p_angular', 0.002)  # Ganho Proporcional para velocidade angular
-        self.declare_parameter('tolerancia_centralizacao', 25)  # Pixels de tolerância para o alvo
+        # ======================
+        # Parâmetros configuráveis
+        # ======================
+        self.declare_parameter("altitude_cruzeiro", 3.0)
+        self.declare_parameter("ganho_p_linear", 0.005)
+        self.declare_parameter("ganho_p_angular", 0.002)
+        self.declare_parameter("tolerancia_centralizacao", 25)
+        self.declare_parameter("image_center_x", 320)
+        self.declare_parameter("image_center_y", 240)
 
-        self.ALTITUDE_CRUZEIRO = self.get_parameter('altitude_cruzeiro').get_parameter_value().double_value
-        self.KP_LINEAR = self.get_parameter('ganho_p_linear').get_parameter_value().double_value
-        self.KP_ANGULAR = self.get_parameter('ganho_p_angular').get_parameter_value().double_value
-        self.CENTERING_TOLERANCE = self.get_parameter('tolerancia_centralizacao').get_parameter_value().integer_value
+        self.ALTITUDE_CRUZEIRO = float(self.get_parameter("altitude_cruzeiro").value)
+        self.KP_LINEAR = float(self.get_parameter("ganho_p_linear").value)
+        self.KP_ANGULAR = float(self.get_parameter("ganho_p_angular").value)
+        self.CENTER_TOL = int(self.get_parameter("tolerancia_centralizacao").value)
+        self.IMG_CX = int(self.get_parameter("image_center_x").value)
+        self.IMG_CY = int(self.get_parameter("image_center_y").value)
 
-        # --- Variáveis de Estado ---
-        self.mission_state = "INICIO"  # Máquina de estados: INICIO, DECOLANDO, SEGUINDO_LINHA, CENTRALIZANDO, SOLTANDO_GANCHO, VOLTANDO, POUSANDO, FIM
-        self.current_fcu_state = State()
-        self.current_pose = None
+        # ======================
+        # Estado interno
+        # ======================
+        # Máquina de estados
+        self.state = "INICIO"  # INICIO, DECOLANDO, AGUARDA_DECOLAGEM, SEGUINDO, CENTRALIZANDO, SOLTANDO, VOLTANDO, POUSANDO, AGUARDA_POUSO, FIM
+
+        # MAV / pose
+        self.fcu_state = State()
+        self.pose: Optional[PoseStamped] = None
+        self.home = None  # (x, y) ao receber a primeira pose
+
+        # Visão
         self.vision_state = "perdido"
-        self.line_center = [-1, -1]
-        self.red_detected = False
-        self.gancho_status = "waiting"
-        self.home_position = None  # Posição de decolagem para retorno
+        self.line_x = -1
+        self.line_y = -1
 
-        # --- Configuração de ROS ---
-        self.callback_group = ReentrantCallbackGroup()
-        qos_profile = QoSProfile(
+        # Gancho
+        self.gancho_status = "waiting"
+
+        # Controle de chamadas assíncronas
+        self.pending_future = None
+        self.pending_kind = None  # "mode" | "arm" | "takeoff" | "land"
+
+        # Auxiliares de tempo/estabilização
+        self.t0 = self.get_clock().now()
+        self.last_info_log = self.get_clock().now()
+        self.steady_aligned_count = 0
+        self.last_gancho_pub = self.get_clock().now()
+
+        # ======================
+        # ROS wiring
+        # ======================
+        self.cb_group = ReentrantCallbackGroup()
+        qos_be = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=1,
         )
 
-        # --- Publishers ---
-        self.velocity_pub = self.create_publisher(Twist, '/mavros/setpoint_velocity/cmd_vel_unstamped', 10)
-        self.gancho_pos_pub = self.create_publisher(String, '/gancho/posicao_drone', 10)
+        # Publishers
+        self.pub_vel = self.create_publisher(Twist, "/mavros/setpoint_velocity/cmd_vel_unstamped", 10)
+        self.pub_gancho_pos = self.create_publisher(String, "/gancho/posicao_drone", 10)
 
-        # --- Subscribers ---
-        # Callbacks de MAVROS
-        self.state_sub = self.create_subscription(State, '/mavros/state', self.state_cb, qos_profile)
-        self.pose_sub = self.create_subscription(PoseStamped, '/mavros/local_position/pose', self.pose_cb, qos_profile)
+        # Subscribers
+        self.sub_state = self.create_subscription(State, "/mavros/state", self._on_state, qos_be)
+        self.sub_pose = self.create_subscription(PoseStamped, "/mavros/local_position/pose", self._on_pose, qos_be)
+        self.sub_vision_state = self.create_subscription(String, "/vision/state", self._on_vision_state, 10)
+        self.sub_line = self.create_subscription(Int32MultiArray, "/vision/line_position", self._on_line_position, 10)
+        self.sub_gancho = self.create_subscription(String, "/gancho/status", self._on_gancho_status, 10)
 
-        # Callbacks de Visão
-        self.vision_state_sub = self.create_subscription(String, '/vision/state', self.vision_state_cb, 10)
-        self.line_pos_sub = self.create_subscription(Int32MultiArray, '/vision/line_position', self.line_position_cb,
-                                                     10)
+        # Service clients
+        self.cli_mode = self.create_client(SetMode, "/mavros/set_mode")
+        self.cli_arm = self.create_client(CommandBool, "/mavros/cmd/arming")
+        self.cli_takeoff = self.create_client(CommandTOL, "/mavros/cmd/takeoff")
+        self.cli_land = self.create_client(CommandTOL, "/mavros/cmd/land")
 
-        # Callback do Gancho
-        self.gancho_status_sub = self.create_subscription(String, '/gancho/status', self.gancho_status_cb, 10)
+        # Timer principal (10 Hz)
+        self.timer = self.create_timer(0.1, self._step, callback_group=self.cb_group)
 
-        # --- Clients de Serviço MAVROS ---
-        self.arming_client = self.create_client(CommandBool, '/mavros/cmd/arming')
-        self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
-        self.takeoff_client = self.create_client(CommandTOL, '/mavros/cmd/takeoff')
-        self.land_client = self.create_client(CommandTOL, '/mavros/cmd/land')
+        self.get_logger().info(f"Nó de navegação iniciado. Altitude de cruzeiro: {self.ALTITUDE_CRUZEIRO:.2f} m")
 
-        # --- Timers ---
-        self.mission_timer = self.create_timer(0.1, self.mission_step)  # Loop principal da missão
+    # ======================
+    # Callbacks de assinatura
+    # ======================
+    def _on_state(self, msg: State):
+        self.fcu_state = msg
 
-        self.get_logger().info(f"Nó de navegação iniciado. Altitude de cruzeiro: {self.ALTITUDE_CRUZEIRO}m")
+    def _on_pose(self, msg: PoseStamped):
+        self.pose = msg
+        if self.home is None:
+            self.home = (msg.pose.position.x, msg.pose.position.y)
+            self.get_logger().info(f"HOME definido: x={self.home[0]:.2f}, y={self.home[1]:.2f}")
 
-    # --- Funções de Callback ---
-    def state_cb(self, msg):
-        self.current_fcu_state = msg
-
-    def pose_cb(self, msg):
-        self.current_pose = msg.pose
-        if self.home_position is None:  # Salva a primeira posição recebida como 'home'
-            self.home_position = self.current_pose.position
-            self.get_logger().info(
-                f"Posição HOME definida em: x={self.home_position.x:.2f}, y={self.home_position.y:.2f}")
-
-    def vision_state_cb(self, msg):
+    def _on_vision_state(self, msg: String):
         self.vision_state = msg.data
 
-    def line_position_cb(self, msg):
-        self.line_center = msg.data
+    def _on_line_position(self, msg: Int32MultiArray):
+        # Espera [x, y]
+        if len(msg.data) >= 2:
+            self.line_x = int(msg.data[0])
+            self.line_y = int(msg.data[1])
+        else:
+            self.line_x = -1
+            self.line_y = -1
 
-    def gancho_status_cb(self, msg):
+    def _on_gancho_status(self, msg: String):
         self.gancho_status = msg.data
 
-    # --- Funções de Controle MAVROS (Assíncronas) ---
-    async def set_mode(self, mode_name):
-        await self.set_mode_client.wait_for_service()
-        req = SetMode.Request()
-        req.custom_mode = mode_name
-        future = self.set_mode_client.call_async(req)
-        await future
-        if future.result().mode_sent:
-            self.get_logger().info(f"Modo alterado para {mode_name}")
-            return True
-        self.get_logger().error(f"Falha ao alterar modo para {mode_name}")
-        return False
+    # ======================
+    # Helpers: comandos e math
+    # ======================
+    def _send_vel(self, vx: float = 0.0, wz: float = 0.0):
+        cmd = Twist()
+        cmd.linear.x = float(vx)
+        cmd.angular.z = float(wz)
+        self.pub_vel.publish(cmd)
 
-    async def arm(self):
-        await self.arming_client.wait_for_service()
-        req = CommandBool.Request()
-        req.value = True
-        future = self.arming_client.call_async(req)
-        await future
-        if future.result().success:
-            self.get_logger().info("Drone armado")
-            return True
-        self.get_logger().error("Falha ao armar o drone")
-        return False
-
-    async def takeoff(self, altitude):
-        await self.takeoff_client.wait_for_service()
-        req = CommandTOL.Request()
-        req.altitude = altitude
-        future = self.takeoff_client.call_async(req)
-        await future
-        if future.result().success:
-            self.get_logger().info(f"Decolando para {altitude}m")
-            return True
-        self.get_logger().error("Falha na decolagem")
-        return False
-
-    async def land(self):
-        await self.land_client.wait_for_service()
-        req = CommandTOL.Request()
-        future = self.land_client.call_async(req)
-        await future
-        if future.result().success:
-            self.get_logger().info("Iniciando pouso")
-            return True
-        self.get_logger().error("Falha ao iniciar pouso")
-        return False
-
-    # --- Lógica de Navegação ---
-    def follow_line(self):
-        """Controlador Proporcional para seguir a linha."""
-        if self.line_center[0] == -1 or self.vision_state == 'perdido':
-            # Se a linha for perdida, para de se mover para frente e gira para procurar
-            self.send_velocity(linear_x=0.0, angular_z=0.3)
-            self.get_logger().warn("Linha perdida, procurando...", throttle_duration_sec=1)
-            return
-
-        # O centro da imagem da câmera é assumido como 320 para uma imagem de 640 de largura.
-        # Ajuste se sua câmera tiver resolução diferente.
-        image_center_x = 320
-        error = self.line_center[0] - image_center_x
-
-        linear_x = 0.5  # Velocidade constante para frente
-        angular_z = -self.KP_ANGULAR * error
-
-        self.send_velocity(linear_x=linear_x, angular_z=angular_z)
-
-    def center_on_target(self):
-        """Controlador Proporcional para centralizar no alvo vermelho."""
-        if self.line_center[0] == -1:
-            self.send_velocity(linear_x=0.0, angular_z=0.0)  # Para se não houver alvo
-            return
-
-        image_center_x = 320
-        image_center_y = 240  # Assumindo altura de 480
-
-        error_x = self.line_center[0] - image_center_x
-        error_y = self.line_center[1] - image_center_y  # Controla para frente/trás
-
-        # Se o erro for pequeno o suficiente, para.
-        if abs(error_x) < self.CENTERING_TOLERANCE and abs(error_y) < self.CENTERING_TOLERANCE:
-            self.send_velocity(linear_x=0.0, angular_z=0.0)
-            return "ALINHADO"
-
-        # Usa os erros para gerar comandos de velocidade
-        linear_x = -self.KP_LINEAR * error_y  # Erro em Y controla velocidade para frente/trás
-        angular_z = -self.KP_ANGULAR * error_x  # Erro em X controla rotação
-
-        self.send_velocity(linear_x=linear_x, angular_z=angular_z)
-        return "ALINHANDO"
-
-    def go_to_home(self):
-        """Controlador Proporcional para retornar à base."""
-        if not self.current_pose or not self.home_position:
-            return
-
-        error_x = self.home_position.x - self.current_pose.position.x
-        error_y = self.home_position.y - self.current_pose.position.y
-        dist_to_home = math.sqrt(error_x ** 2 + error_y ** 2)
-
-        if dist_to_home < 0.5:  # Tolerância de chegada
-            self.send_velocity(0.0, 0.0)
-            return "CHEGOU"
-
-        # Calcula o ângulo para a base e o erro de orientação
-        angle_to_home = math.atan2(error_y, error_x)
-        current_yaw = self.quat_to_yaw(self.current_pose.orientation)
-        error_angle = self.normalize_angle(angle_to_home - current_yaw)
-
-        # Controle
-        linear_x = 0.8 if dist_to_home > 2.0 else 0.4  # Reduz a velocidade perto de casa
-        angular_z = 0.5 * error_angle
-
-        self.send_velocity(linear_x, angular_z)
-        return "NAVEGANDO"
-
-    def send_velocity(self, linear_x=0.0, angular_z=0.0):
-        """Publica um comando de velocidade."""
-        vel_msg = Twist()
-        vel_msg.linear.x = linear_x
-        vel_msg.angular.z = angular_z
-        self.velocity_pub.publish(vel_msg)
-
-    def publish_gancho_centered(self):
-        msg = String()
-        msg.data = "Drone centralizado"
-        self.gancho_pos_pub.publish(msg)
-        self.get_logger().info("Publicado: 'Drone centralizado'")
-
-    # --- Máquina de Estados da Missão (Loop Principal) ---
-    async def mission_step(self):
-        """Executa um passo da máquina de estados da missão."""
-        if not self.current_fcu_state.connected or self.current_pose is None:
-            self.get_logger().warn("Aguardando conexão com FCU e dados de pose...", throttle_duration_sec=5)
-            return
-
-        # --- ESTADO: INICIO ---
-        if self.mission_state == "INICIO":
-            self.get_logger().info("Estado da Missão: INICIO. Configurando modo para GUIDED e armando...")
-            if self.current_fcu_state.mode != "GUIDED":
-                await self.set_mode("GUIDED")
-                return  # Aguarda próximo ciclo para verificar
-            if not self.current_fcu_state.armed:
-                await self.arm()
-                return  # Aguarda próximo ciclo para verificar
-            self.mission_state = "DECOLANDO"
-            self.get_logger().info("Pronto para decolar.")
-
-        # --- ESTADO: DECOLANDO ---
-        elif self.mission_state == "DECOLANDO":
-            self.get_logger().info(f"Estado da Missão: DECOLANDO para {self.ALTITUDE_CRUZEIRO}m")
-            await self.takeoff(self.ALTITUDE_CRUZEIRO)
-            self.mission_state = "AGUARDANDO_DECOLAGEM"
-
-        elif self.mission_state == "AGUARDANDO_DECOLAGEM":
-            if self.current_pose.position.z >= self.ALTITUDE_CRUZEIRO * 0.95:
-                self.get_logger().info("Decolagem concluída. Aguardando 3s para estabilizar.")
-                time.sleep(3)  # Pausa para estabilização
-                self.mission_state = "SEGUINDO_LINHA"
-            else:
-                self.get_logger().info(f"Aguardando atingir altitude... Atual: {self.current_pose.position.z:.2f}m",
-                                       throttle_duration_sec=2)
-
-        # --- ESTADO: SEGUINDO_LINHA ---
-        elif self.mission_state == "SEGUINDO_LINHA":
-            self.get_logger().info("Estado da Missão: SEGUINDO_LINHA", throttle_duration_sec=5)
-            if self.vision_state == "vermelho_detectado":
-                self.get_logger().info("Alvo vermelho detectado! Mudando para estado CENTRALIZANDO.")
-                self.send_velocity(0.0, 0.0)  # Para o drone
-                time.sleep(1)  # Pausa antes de começar a centralizar
-                self.mission_state = "CENTRALIZANDO"
-            else:
-                self.follow_line()
-
-        # --- ESTADO: CENTRALIZANDO ---
-        elif self.mission_state == "CENTRALIZANDO":
-            self.get_logger().info("Estado da Missão: CENTRALIZANDO no alvo", throttle_duration_sec=3)
-            status = self.center_on_target()
-            if status == "ALINHADO":
-                self.get_logger().info("Drone alinhado com o alvo.")
-                self.publish_gancho_centered()
-                self.mission_state = "SOLTANDO_GANCHO"
-
-        # --- ESTADO: SOLTANDO_GANCHO ---
-        elif self.mission_state == "SOLTANDO_GANCHO":
-            self.get_logger().info(f"Estado da Missão: SOLTANDO_GANCHO. Status atual do gancho: {self.gancho_status}",
-                                   throttle_duration_sec=2)
-            if self.gancho_status == 'released':
-                self.get_logger().info("Gancho solto com sucesso! Retornando à base.")
-                time.sleep(2)  # Pausa antes de retornar
-                self.mission_state = "VOLTANDO"
-            else:
-                # Re-publica a mensagem caso o nó do gancho não tenha recebido
-                self.publish_gancho_centered()
-                time.sleep(1)
-
-        # --- ESTADO: VOLTANDO ---
-        elif self.mission_state == "VOLTANDO":
-            self.get_logger().info("Estado da Missão: VOLTANDO para a base.", throttle_duration_sec=5)
-            status = self.go_to_home()
-            if status == "CHEGOU":
-                self.get_logger().info("Chegou à base. Preparando para pousar.")
-                self.mission_state = "POUSANDO"
-
-        # --- ESTADO: POUSANDO ---
-        elif self.mission_state == "POUSANDO":
-            self.get_logger().info("Estado da Missão: POUSANDO.")
-            await self.set_mode("LAND")  # Usa o modo de pouso do MAVROS
-            self.mission_state = "AGUARDANDO_POUSO"
-
-        elif self.mission_state == "AGUARDANDO_POUSO":
-            if not self.current_fcu_state.armed:
-                self.get_logger().info("Pouso concluído e drone desarmado.")
-                self.mission_state = "FIM"
-            else:
-                self.get_logger().info("Aguardando pouso e desarme...", throttle_duration_sec=3)
-
-        # --- ESTADO: FIM ---
-        elif self.mission_state == "FIM":
-            self.get_logger().info("MISSÃO CONCLUÍDA!")
-            self.mission_timer.cancel()  # Para o loop da missão
-            rclpy.shutdown()
-
-    # --- Funções Utilitárias ---
-    def quat_to_yaw(self, q):
-        """Converte um quaternion para ângulo yaw."""
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+    @staticmethod
+    def _quat_to_yaw(q):
+        # z-yaw only
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         return math.atan2(siny_cosp, cosy_cosp)
 
-    def normalize_angle(self, angle):
-        """Normaliza um ângulo para o intervalo [-pi, pi]."""
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
+    @staticmethod
+    def _norm_angle(a):
+        while a > math.pi:
+            a -= 2.0 * math.pi
+        while a < -math.pi:
+            a += 2.0 * math.pi
+        return a
+
+    # ======================
+    # Helpers: serviços assíncronos (não-bloqueantes)
+    # ======================
+    def _request_set_mode(self, mode: str):
+        if not self.cli_mode.wait_for_service(timeout_sec=0.0):
+            self._log_every(2.0, "Aguardando serviço /mavros/set_mode...")
+            return False
+        req = SetMode.Request()
+        req.custom_mode = mode
+        self.pending_future = self.cli_mode.call_async(req)
+        self.pending_kind = "mode"
+        self.get_logger().info(f"Solicitado modo: {mode}")
+        return True
+
+    def _request_arm(self, value: bool):
+        if not self.cli_arm.wait_for_service(timeout_sec=0.0):
+            self._log_every(2.0, "Aguardando serviço /mavros/cmd/arming...")
+            return False
+        req = CommandBool.Request()
+        req.value = bool(value)
+        self.pending_future = self.cli_arm.call_async(req)
+        self.pending_kind = "arm"
+        self.get_logger().info(f"Solicitado armar={value}")
+        return True
+
+    def _request_takeoff(self, alt: float):
+        if not self.cli_takeoff.wait_for_service(timeout_sec=0.0):
+            self._log_every(2.0, "Aguardando serviço /mavros/cmd/takeoff...")
+            return False
+        req = CommandTOL.Request()
+        req.altitude = float(alt)
+        self.pending_future = self.cli_takeoff.call_async(req)
+        self.pending_kind = "takeoff"
+        self.get_logger().info(f"Solicitado takeoff para {alt:.2f} m")
+        return True
+
+    def _request_land(self):
+        if not self.cli_land.wait_for_service(timeout_sec=0.0):
+            self._log_every(2.0, "Aguardando serviço /mavros/cmd/land...")
+            return False
+        req = CommandTOL.Request()
+        self.pending_future = self.cli_land.call_async(req)
+        self.pending_kind = "land"
+        self.get_logger().info("Solicitado land")
+        return True
+
+    def _handle_pending(self) -> bool:
+        """
+        Verifica se há chamada assíncrona pendente. Se ainda não terminou, retorna True (aguardando).
+        Se terminou, processa o resultado e libera o pending_*.
+        Retorna False quando não há nada pendente.
+        """
+        if self.pending_future is None:
+            return False
+        if not self.pending_future.done():
+            return True
+
+        try:
+            res = self.pending_future.result()
+        except Exception as e:
+            self.get_logger().error(f"Erro na chamada '{self.pending_kind}': {e}")
+            self.pending_future = None
+            self.pending_kind = None
+            return False
+
+        kind = self.pending_kind
+        self.pending_future = None
+        self.pending_kind = None
+
+        if kind == "mode":
+            if getattr(res, "mode_sent", False):
+                self.get_logger().info("Modo alterado com sucesso.")
+            else:
+                self.get_logger().error("Falha ao alterar modo.")
+        elif kind == "arm":
+            if getattr(res, "success", False):
+                self.get_logger().info("Armar/desarmar concluído.")
+            else:
+                self.get_logger().error("Falha no armar/desarmar.")
+        elif kind == "takeoff":
+            if getattr(res, "success", False):
+                self.get_logger().info("Takeoff aceito.")
+            else:
+                self.get_logger().error("Falha no takeoff.")
+        elif kind == "land":
+            if getattr(res, "success", False):
+                self.get_logger().info("Land aceito.")
+            else:
+                self.get_logger().error("Falha no land.")
+
+        return False
+
+    # ======================
+    # Controle de linha e centralização
+    # ======================
+    def _follow_line(self):
+        if self.line_x < 0 or self.vision_state == "perdido":
+            # Procura linha: gira devagar
+            self._send_vel(0.0, 0.3)
+            return
+
+        error_x = self.line_x - self.IMG_CX
+        vx = 0.5
+        wz = -self.KP_ANGULAR * float(error_x)
+        self._send_vel(vx, wz)
+
+    def _center_on_target(self) -> bool:
+        """
+        Usa posição [x, y] para centralizar.
+        Retorna True quando está alinhado de forma estável por múltiplos ciclos.
+        """
+        if self.line_x < 0 or self.line_y < 0:
+            self._send_vel(0.0, 0.0)
+            self.steady_aligned_count = 0
+            return False
+
+        err_x = self.line_x - self.IMG_CX
+        err_y = self.line_y - self.IMG_CY
+
+        if abs(err_x) <= self.CENTER_TOL and abs(err_y) <= self.CENTER_TOL:
+            # Conta alguns ciclos estáveis para evitar falsos positivos
+            self.steady_aligned_count += 1
+            self._send_vel(0.0, 0.0)
+            return self.steady_aligned_count >= 5  # ~0.5s em 10 Hz
+        else:
+            self.steady_aligned_count = 0
+
+        vx = -self.KP_LINEAR * float(err_y)  # y da imagem -> frente/trás
+        wz = -self.KP_ANGULAR * float(err_x)  # x da imagem -> yaw
+        self._send_vel(vx, wz)
+        return False
+
+    def _go_home(self) -> bool:
+        """
+        Controla retorno ao ponto HOME.
+        Retorna True quando chegou (dist < 0.5 m).
+        """
+        if self.pose is None or self.home is None:
+            return False
+
+        curr = self.pose.pose
+        dx = float(self.home[0] - curr.position.x)
+        dy = float(self.home[1] - curr.position.y)
+        dist = math.hypot(dx, dy)
+        if dist < 0.5:
+            self._send_vel(0.0, 0.0)
+            return True
+
+        heading = math.atan2(dy, dx)
+        yaw = self._quat_to_yaw(curr.orientation)
+        err_yaw = self._norm_angle(heading - yaw)
+
+        vx = 0.8 if dist > 2.0 else 0.4
+        wz = 0.5 * err_yaw
+        self._send_vel(vx, wz)
+        return False
+
+    def _publish_gancho_centralizado(self):
+        now = self.get_clock().now()
+        if (now - self.last_gancho_pub).nanoseconds * 1e-9 < 0.5:
+            return
+        self.last_gancho_pub = now
+        msg = String()
+        msg.data = "Drone centralizado"
+        self.pub_gancho_pos.publish(msg)
+        self.get_logger().info("Publicado: 'Drone centralizado'")
+
+    def _log_every(self, seconds: float, msg: str):
+        now = self.get_clock().now()
+        elapsed = (now - self.last_info_log).nanoseconds * 1e-9
+        if elapsed >= seconds:
+            self.last_info_log = now
+            self.get_logger().info(msg)
+
+    # ======================
+    # Loop principal da missão
+    # ======================
+    def _step(self):
+        # Pré-condições
+        if not getattr(self.fcu_state, "connected", False) or self.pose is None:
+            self._log_every(3.0, "Aguardando conexão com FCU e pose...")
+            return
+
+        # Se há uma chamada de serviço pendente, aguarde concluir
+        if self._handle_pending():
+            return
+
+        # Máquina de estados
+        if self.state == "INICIO":
+            # Modo (ArduPilot): GUIDED. (Para PX4 seria OFFBOARD.)
+            if self.fcu_state.mode != "GUIDED":
+                if self._request_set_mode("GUIDED"):
+                    return  # aguarda resposta
+            elif not self.fcu_state.armed:
+                if self._request_arm(True):
+                    return
+            else:
+                self.state = "DECOLANDO"
+                self.t0 = self.get_clock().now()
+                self.get_logger().info("Transição -> DECOLANDO")
+
+        elif self.state == "DECOLANDO":
+            if self._request_takeoff(self.ALTITUDE_CRUZEIRO):
+                self.state = "AGUARDA_DECOLAGEM"
+                self.get_logger().info("Transição -> AGUARDA_DECOLAGEM")
+
+        elif self.state == "AGUARDA_DECOLAGEM":
+            alt = float(self.pose.pose.position.z) if self.pose else 0.0
+            if alt >= 0.95 * self.ALTITUDE_CRUZEIRO:
+                self.state = "SEGUINDO"
+                self.get_logger().info("Decolagem concluída. Transição -> SEGUINDO")
+            else:
+                self._log_every(2.0, f"Aguardando atingir altitude... atual={alt:.2f} m")
+
+        elif self.state == "SEGUINDO":
+            # Se visão sinalizar vermelho, interrompe e centraliza
+            if self.vision_state == "vermelho_detectado":
+                self._send_vel(0.0, 0.0)
+                self.state = "CENTRALIZANDO"
+                self.get_logger().info("Alvo vermelho detectado. Transição -> CENTRALIZANDO")
+            else:
+                self._follow_line()
+
+        elif self.state == "CENTRALIZANDO":
+            aligned = self._center_on_target()
+            if aligned:
+                self._publish_gancho_centralizado()
+                self.state = "SOLTANDO"
+                self.get_logger().info("Alinhado. Transição -> SOLTANDO")
+
+        elif self.state == "SOLTANDO":
+            if self.gancho_status == "released":
+                self.state = "VOLTANDO"
+                self.get_logger().info("Gancho liberado. Transição -> VOLTANDO")
+            else:
+                # Reenvia o sinal periodicamente
+                self._publish_gancho_centralizado()
+
+        elif self.state == "VOLTANDO":
+            if self._go_home():
+                self.state = "POUSANDO"
+                self.get_logger().info("Chegou ao HOME. Transição -> POUSANDO")
+
+        elif self.state == "POUSANDO":
+            # Preferimos comando LAND para fechar missão e desarmar
+            if self._request_land():
+                self.state = "AGUARDA_POUSO"
+                self.get_logger().info("Transição -> AGUARDA_POUSO")
+
+        elif self.state == "AGUARDA_POUSO":
+            if not self.fcu_state.armed:
+                self.state = "FIM"
+                self.get_logger().info("Pouso concluído. Transição -> FIM")
+            else:
+                self._log_every(3.0, "Aguardando pouso/desarme...")
+
+        elif self.state == "FIM":
+            self._send_vel(0.0, 0.0)
+            self._log_every(5.0, "MISSÃO CONCLUÍDA.")
+            # Não desligamos o nó aqui para facilitar re-observação dos tópicos.
 
 
 def main(args=None):
@@ -344,11 +419,10 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Navegação interrompida pelo usuário.")
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
