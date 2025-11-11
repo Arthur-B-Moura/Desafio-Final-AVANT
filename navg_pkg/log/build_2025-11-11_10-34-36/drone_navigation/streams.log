@@ -1,0 +1,17 @@
+[0.526s] Invoking command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build --no-deps symlink_data
+[0.726s] running develop
+[0.850s] running egg_info
+[0.851s] writing drone_navigation.egg-info/PKG-INFO
+[0.851s] writing dependency_links to drone_navigation.egg-info/dependency_links.txt
+[0.851s] writing entry points to drone_navigation.egg-info/entry_points.txt
+[0.851s] writing requirements to drone_navigation.egg-info/requires.txt
+[0.851s] writing top-level names to drone_navigation.egg-info/top_level.txt
+[0.852s] reading manifest file 'drone_navigation.egg-info/SOURCES.txt'
+[0.853s] writing manifest file 'drone_navigation.egg-info/SOURCES.txt'
+[0.854s] running build_ext
+[0.854s] Creating /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone-navigation.egg-link (link to .)
+[0.855s] Installing navigator script to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/drone_navigation
+[0.855s] 
+[0.855s] Installed /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation
+[0.855s] running symlink_data
+[0.890s] Invoked command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation' returned '0': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build --no-deps symlink_data

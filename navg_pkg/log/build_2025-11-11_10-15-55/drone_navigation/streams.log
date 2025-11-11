@@ -1,0 +1,20 @@
+[0.478s] Invoking command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build --no-deps symlink_data --force
+[0.677s] running develop
+[0.790s] running egg_info
+[0.790s] writing drone_navigation.egg-info/PKG-INFO
+[0.790s] writing dependency_links to drone_navigation.egg-info/dependency_links.txt
+[0.790s] writing entry points to drone_navigation.egg-info/entry_points.txt
+[0.790s] writing requirements to drone_navigation.egg-info/requires.txt
+[0.791s] writing top-level names to drone_navigation.egg-info/top_level.txt
+[0.791s] reading manifest file 'drone_navigation.egg-info/SOURCES.txt'
+[0.792s] writing manifest file 'drone_navigation.egg-info/SOURCES.txt'
+[0.793s] running build_ext
+[0.793s] Creating /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages/drone-navigation.egg-link (link to .)
+[0.794s] Installing navigator script to /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/drone_navigation
+[0.794s] 
+[0.794s] Installed /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation
+[0.794s] running symlink_data
+[0.794s] symbolically linking /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/resource/drone_navigation -> /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/share/ament_index/resource_index/packages
+[0.794s] symbolically linking /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/package.xml -> /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/share/drone_navigation
+[0.794s] symbolically linking /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/launch/mission_launch.py -> /home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/share/drone_navigation/launch
+[0.828s] Invoked command in '/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation' returned '0': PYTHONPATH=/home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/gabriel/Desafio-Final-AVANT/navg_pkg/install/drone_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/gabriel/Desafio-Final-AVANT/navg_pkg/build/drone_navigation/build --no-deps symlink_data --force
