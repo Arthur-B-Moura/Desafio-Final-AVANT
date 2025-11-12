@@ -5,6 +5,20 @@ Repositório para gerenciamento dos códigos para o Desafio Final da AVANT - Gru
 > Em construção
 
 
+## Passos para execução da solução
+
+Para executar o conjunto de algoritmos da solução desenvolvida para a missão, deve-se, em primeiro momento, a partir do diretório do workspace, e já com as packages devidamente baixadas, executar:
+```
+$ colcun build --packages-select gancho_pkg_tester drone_navigation drone_vision
+$ source ~/.bashrc
+```
+
+Então, basta apenas executar o arquivo launcher geral:
+```
+$ ros2 launch drone_navigation solution.launch.py
+```
+
+
 ## Módulo de controle do Gancho
 
 Há dois pacotes referentes ao módulo do gancho:
