@@ -1,10 +1,13 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
     <name> drone_vision </name>
     <version> 0.0.1 </version>
     <description>
         Pacote de visão computacional para detecção de linha azul e mangueira vermelha.
     </description>
+    <maintainer email="rosuser@todo.todo">rosuser</maintainer>
+    <license>TODO: License declaration</license>
 
     <!-- Dependências de execução -->
     <exec_depend> rclpy         </exec_depend>
