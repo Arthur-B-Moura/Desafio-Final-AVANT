@@ -13,7 +13,10 @@ setup(
     ],
     install_requires = ['setuptools'],
     zip_safe      = True,
+    maintainer='rosuser',
+    maintainer_email='rosuser@todo.todo',
     description   = 'Pacote ROS 2 para detecção de linha azul e mangueira vermelha.',
+    license='TODO: License declaration',
     tests_require = ['pytest'],
     entry_points  = {
         'console_scripts': ['line_detector = drone_vision.line_detector:main'],
