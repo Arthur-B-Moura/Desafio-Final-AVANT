@@ -20,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "tester_node = gancho_pkg.tester:main",
-            "gancho_node = gancho_pkg.gancho:main"
+            "tester_node = gancho_pkg_tester.tester:main",
+            "gancho_node = gancho_pkg_tester.gancho:main"
         ],
     },
 )
