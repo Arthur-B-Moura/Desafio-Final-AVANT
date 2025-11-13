@@ -92,10 +92,6 @@ class GanchoReleaseNode(Node):
         self.status.data = 'released' 
         self.get_logger().info("Relé desativado -> gancho liberado")
 
-        # Desabilita self.ready para evitar que função seja chamada mais de uma vez
-        self.ready = False
-    
-
 
 #===================#
 #                   #
