@@ -84,7 +84,7 @@ ros2 run rqt_image_view rqt_image_view
 #### 2. Módulo de Navegação
 
 ```bash
-ros2 run drone_navigation navigation_node
+ros2 run drone_navigation navigator
 ```
 
 #### 3. Módulo do Gancho
