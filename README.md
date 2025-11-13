@@ -265,15 +265,6 @@ cd ~/ardu_ws/Startup
 ./start_simulation.sh  # ou o comando específico do tmux
 ```
 
-### Remover Container Antigo (se necessário)
-
-```bash
-docker ps -a                        # Listar containers
-docker stop aula_navegacao          # Parar container antigo
-docker rm aula_navegacao            # Remover container
-docker rmi aula_navegacao           # Remover imagem
-```
-
 ---
 
 ## Estrutura de Pacotes
@@ -283,9 +274,9 @@ Desafio-Final-AVANT/
 ├── drone_vision/              # Visão computacional
 │   ├── drone_vision/
 │   │   ├── __init__.py
-│   │   └── line_detector.py   # Nó de detecção
+│   │   └── line_detector.py   # Arquivo principal de detecção
 │   ├── launch/
-│   │   └── vision.launch.py   # Launch file
+│   │   └── vision.launch.py
 │   ├── resource/
 │   ├── package.xml
 │   ├── setup.py
@@ -294,22 +285,38 @@ Desafio-Final-AVANT/
 ├── gancho_pkg/                # Controle do gancho (Jetson)
 │   ├── gancho_pkg/
 │   │   ├── __init__.py
-│   │   ├── gancho.py          # Nó principal
-│   │   └── tester.py          # Nó de teste
+│   │   ├── gancho.py          # Arquivo principal do gancho
+│   │   └── tester.py
 │   ├── resource/
 │   ├── test/
 │   ├── package.xml
 │   ├── setup.py
 │   └── setup.cfg
 │
-├── gancho_pkg_tester/         # Teste sem Jetson
-│   └── [mesma estrutura]
+├── gancho_pkg_tester/         # Controle do gancho (sem Jetson)
+│   └── [...]
 │
 ├── navg_pkg/                  # Navegação do drone
 │   ├── src/
-│   │   └── drone_navigation/
+│   │   ├── drone_navigation/
+│   │   │   ├── __init__.py
+│   │   │   └── navigator.py   # Arquivo principal de navegação
+|   |   ├── launch/
+│   │   │   ├── mission_launch.py
+│   │   │   └── solution.launch.py
+|   |   ├── resource/
+│   │   │   └── drone_navigation
+|   |   ├── test/
+│   │   │   └── [...]
+|   │   ├── package.xml
+|   │   ├── setup.py
+|   │   └── setup.cfg
 │   ├── build/
-│   └── install/
+│   │   └── [...]
+│   ├── install/
+│   │   └── [...]
+│   └── log/
+│   │   └── [...]
 │
 └── README.md
 ```
@@ -365,7 +372,7 @@ Os warnings de MAVLink (`DeviceError:url:UDP separator not found`) são **normai
 
 ---
 
-## 👥 Equipe
+## Equipe
 - Arthur Bertolini
 - Gabriel Ribeiro
 - Mateus Gontijo
