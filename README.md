@@ -18,16 +18,17 @@ O sistema é composto por três módulos principais:
 
 ### Fluxo de Operação
 
-```
-[Visão] → detecta linha azul → publica posição
-    ↓
-[Navegação] → segue linha → busca mangueira vermelha
-    ↓
-[Visão] → detecta vermelho → publica "centralizado"
-    ↓
-[Navegação] → alinha drone com alvo
-    ↓
-[Gancho] → recebe sinal → libera gancho
+```mermaid
+graph TD
+    A[Visão] -- Posição da linha azul --> B(Navegação);
+    B -- Segue a linha --> B;
+    A -- Posição do alvo vermelho --> B;
+    B -- Para de seguir a linha --> C{Centralizar no Alvo};
+    C -- Controla velocidade e guinada --> C;
+    C -- Drone alinhado --> D(Navegação);
+    D -- Envia comando Drone centralizado --> E[Gancho];
+    E -- Recebe comando e solta a carga --> F(Navegação);
+    F -- Recebe status released --> G[Retornar ao HOME e Pousar];
 ```
 
 ---
@@ -133,6 +134,26 @@ ros2 run gancho_pkg_tester gancho_node
   - `"preparing"` - Preparando para soltar gancho
   - `"released"` - Gancho liberado com sucesso
 
+### Módulo de Navegação (`drone_navigation`)
+
+**Subscrições:**
+- `/vision/state` - `std_msgs/String`
+  - Recebe o estado atual da detecção (`"seguindo"`, `"vermelho_detectado"`).
+- `/vision/line_position` - `std_msgs/Int32MultiArray`
+  - Recebe as coordenadas do alvo para o controle de movimento.
+- `/gancho/status` - `std_msgs/String`
+  - Monitora o status do gancho (`"released"`) para saber quando retornar.
+- `/mavros/state` - `mavros_msgs/msg/State`
+  - Verifica o estado da conexão, modo de voo e se o drone está armado.
+- `/mavros/local_position/pose` - `geometry_msgs/PoseStamped`
+  - Obtém a altitude e a posição do drone para decolagem e retorno ao ponto de partida.
+
+**Publicações:**
+- `/gancho/posicao_drone` - `std_msgs/String`
+  - Envia a mensagem `"Drone centralizado"` para acionar o módulo do gancho.
+- `/mavros/setpoint_velocity/cmd_vel_unstamped` - `geometry_msgs/Twist`
+  - Envia comandos de velocidade linear e angular para controlar o movimento do drone.
+
 ---
 
 ## Testes
@@ -185,7 +206,33 @@ ros2 node list
 ros2 node info /line_detector_node
 ```
 
----
+### Testar Módulo de Navegação
+
+Copie e cole os comandos abaixo em 3 terminais distintos. Em cada terminal, antes de rodar os comandos, sempre faça:
+
+```bash
+source /opt/ros/humble/setup.bash
+cd ~/Desafio-Final-AVANT/navg_pkg
+source install/setup.bash
+```
+
+Terminal 1 — mock_feeder (publica pose / visão / gancho)
+```bash
+# Terminal 1
+python3 scripts/mock_feeder.py
+```
+
+Terminal 2 — dummy dos serviços MAVROS (responde set_mode / arming / takeoff / land)
+```bash
+# Terminal 2
+python3 scripts/mavros_services_dummy.py
+```
+
+Terminal 3 — navigator (nó que você está testando)
+```bash
+# Terminal 3
+ros2 run drone_navigation navigator
+```
 
 ## Configuração e Calibração
 
@@ -228,6 +275,23 @@ ros2 launch drone_vision vision.launch.py calibration_mode:=true
 ```
 
 Isso abrirá janelas OpenCV mostrando as máscaras de cor em tempo real.
+
+### Ajustar Parâmetros de Navegação
+
+Os parâmetros do nó `navigator` podem ser ajustados no pŕoprio arquivo `navigator.py`
+
+#### Ganhos do Controle
+```python
+# Ganhos do controlador Proporcional
+'ganho_p_linear': 0.005,      # Controla a velocidade de avanço/recuo ao centralizar no alvo.
+'ganho_p_angular': 0.002,     # Controla a velocidade de rotação (guinada) para seguir a linha e centralizar.
+```
+
+#### Comportamento da Missão
+```python
+'altitude_cruzeiro': 3.0,     # Altitude (metros) que o drone atinge após a decolagem.
+'tolerancia_centralizacao': 25 # Tolerância (pixels) para considerar o drone alinhado com o alvo.
+```
 
 ---
 
