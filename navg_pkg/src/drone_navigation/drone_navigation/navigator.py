@@ -9,7 +9,6 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from std_msgs.msg import String, Int32MultiArray
 from geometry_msgs.msg import PoseStamped, Twist
-from nav_msgs.msg import Odometry
 from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode, CommandTOL
 
@@ -18,7 +17,6 @@ class NavigatorNode(Node):
     """
     Nó principal de navegação (ROS 2) que integra visão e gancho para a missão.
     Implementa uma máquina de estados não-bloqueante com chamadas de serviço assíncronas.
-    Agora usa /mavros/global_position/local (Odometry) como fonte de pose.
     """
 
     def __init__(self):
@@ -86,15 +84,7 @@ class NavigatorNode(Node):
 
         # Subscribers
         self.sub_state = self.create_subscription(State, "/mavros/state", self._on_state, qos_be)
-
-        # IMPORTANTE: usar global_position/local (Odometry) como fonte de pose
-        self.sub_pose = self.create_subscription(
-            Odometry,
-            "/mavros/global_position/local",
-            self._on_odom,
-            qos_be,
-        )
-
+        self.sub_pose = self.create_subscription(PoseStamped, "/mavros/local_position/pose", self._on_pose, qos_be)
         self.sub_vision_state = self.create_subscription(String, "/vision/state", self._on_vision_state, 10)
         self.sub_line = self.create_subscription(Int32MultiArray, "/vision/line_position", self._on_line_position, 10)
         self.sub_gancho = self.create_subscription(String, "/gancho/status", self._on_gancho_status, 10)
@@ -116,22 +106,10 @@ class NavigatorNode(Node):
     def _on_state(self, msg: State):
         self.fcu_state = msg
 
-    def _on_odom(self, msg: Odometry):
-        """
-        Usa /mavros/global_position/local (Odometry) como fonte de pose.
-        Converte para PoseStamped interno e define HOME na primeira leitura.
-        """
-        ps = PoseStamped()
-        ps.header = msg.header
-        ps.pose = msg.pose.pose
-        self.pose = ps
-
-        self.get_logger().info(
-            f"ODOM recebido: x={ps.pose.position.x:.2f}, y={ps.pose.position.y:.2f}, z={ps.pose.position.z:.2f}"
-        )
-
+    def _on_pose(self, msg: PoseStamped):
+        self.pose = msg
         if self.home is None:
-            self.home = (ps.pose.position.x, ps.pose.position.y)
+            self.home = (msg.pose.position.x, msg.pose.position.y)
             self.get_logger().info(f"HOME definido: x={self.home[0]:.2f}, y={self.home[1]:.2f}")
 
     def _on_vision_state(self, msg: String):
@@ -351,10 +329,21 @@ class NavigatorNode(Node):
     # Loop principal da missão
     # ======================
     def _step(self):
-        # Pré-condição: precisamos de uma pose válida
-        if self.pose is None:
-            self._log_every(3.0, "Aguardando pose...")
-            return
+        # Pré-condições
+        #if not getattr(self.fcu_state, "connected", False) or self.pose is None:
+        #    self._log_every(3.0, "Aguardando conexão com FCU e pose...")
+        #    return
+        self.get_logger().info('Aguardando conexão com o FCU...')
+        while rclpy.ok() and not self.current_state.connected:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.get_logger().info('Conexão com FCU estabelecida.')
+
+        self.get_logger().info('Aguardando leitura da posição...')
+        while rclpy.ok() and self.current_pose is None:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.get_logger().info(
+            f'Posição inicial lida: {self.current_pose.x:.2f}, {self.current_pose.y:.2f}, {self.current_pose.z:.2f}')
+        return
 
         # Se há uma chamada de serviço pendente, aguarde concluir
         if self._handle_pending():
