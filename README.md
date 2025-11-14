@@ -93,7 +93,7 @@ ros2 run drone_navigation navigator
 # Versão com controle real da Jetson (para hardware)
 ros2 run gancho_pkg gancho_node
 
-# Versão de teste (sem Jetson)
+# Versão para teste na simulação (sem Jetson)
 ros2 run gancho_pkg_tester gancho_node
 ```
 
