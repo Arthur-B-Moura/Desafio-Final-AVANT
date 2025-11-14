@@ -126,6 +126,10 @@ class NavigatorNode(Node):
         ps.pose = msg.pose.pose
         self.pose = ps
 
+        self.get_logger().info(
+            f"ODOM recebido: x={ps.pose.position.x:.2f}, y={ps.pose.position.y:.2f}, z={ps.pose.position.z:.2f}"
+        )
+
         if self.home is None:
             self.home = (ps.pose.position.x, ps.pose.position.y)
             self.get_logger().info(f"HOME definido: x={self.home[0]:.2f}, y={self.home[1]:.2f}")
