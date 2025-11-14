@@ -334,13 +334,13 @@ class NavigatorNode(Node):
         #    self._log_every(3.0, "Aguardando conexão com FCU e pose...")
         #    return
         self.get_logger().info('Aguardando conexão com o FCU...')
-        while rclpy.ok() and getattr(self.fcu_state, "connected", False):
-            rclpy.spin_once(self, timeout_sec=0.1)
+        while rclpy.ok() and not getattr(self.fcu_state, "connected", False):
+            rclpy.spin_once(self, timeout_sec=5)
         self.get_logger().info('Conexão com FCU estabelecida.')
 
         self.get_logger().info('Aguardando leitura da posição...')
         while rclpy.ok() and self.pose is None:
-            rclpy.spin_once(self, timeout_sec=0.1)
+            rclpy.spin_once(self, timeout_sec=5)
         self.get_logger().info(
             f'Posição inicial lida: {self.current_pose.x:.2f}, {self.current_pose.y:.2f}, {self.current_pose.z:.2f}')
         return
