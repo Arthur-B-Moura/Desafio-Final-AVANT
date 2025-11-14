@@ -1,1 +1,0 @@
-/home/gabriel/Desafio-Final-AVANT/navg_pkg/src/drone_navigation/launch/mission_launch.py

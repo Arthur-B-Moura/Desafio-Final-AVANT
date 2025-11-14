@@ -212,26 +212,26 @@ Copie e cole os comandos abaixo em 3 terminais distintos. Em cada terminal, ante
 
 ```bash
 source /opt/ros/humble/setup.bash
-cd ~/Desafio-Final-AVANT/navg_pkg
+cd ~/Desafio-Final-AVANT/navg_pkg/src/drone_navigation/
 source install/setup.bash
 ```
 
 Terminal 1 — mock_feeder (publica pose / visão / gancho)
 ```bash
-# Terminal 1
-python3 scripts/mock_feeder.py
+# Terminal 3
+ros2 run drone_navigation navigator
 ```
 
 Terminal 2 — dummy dos serviços MAVROS (responde set_mode / arming / takeoff / land)
 ```bash
-# Terminal 2
-python3 scripts/mavros_services_dummy.py
+# Terminal 1
+python3 test/mock_feeder.py
 ```
 
 Terminal 3 — navigator (nó que você está testando)
 ```bash
-# Terminal 3
-ros2 run drone_navigation navigator
+# Terminal 2
+python3 test/mavros_services_dummy.py
 ```
 
 ## Configuração e Calibração
