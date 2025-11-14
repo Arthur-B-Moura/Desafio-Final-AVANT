@@ -4,7 +4,7 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from std_msgs.msg import String, Int32MultiArray
@@ -71,32 +71,33 @@ class NavigatorNode(Node):
         # ======================
         # ROS wiring
         # ======================
-        self.cb_group = ReentrantCallbackGroup()
+        self.callback_group = ReentrantCallbackGroup()
         qos_be = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
             depth=10,
         )
 
         # Publishers
-        self.pub_vel = self.create_publisher(Twist, "/mavros/setpoint_velocity/cmd_vel_unstamped", 10)
-        self.pub_gancho_pos = self.create_publisher(String, "/gancho/posicao_drone", 10)
+        self.pub_vel = self.create_publisher(Twist, "/mavros/setpoint_velocity/cmd_vel_unstamped", 10, callback_group=self.callback_group)
+        self.pub_gancho_pos = self.create_publisher(String, "/gancho/posicao_drone", 10, callback_group=self.callback_group)
 
         # Subscribers
-        self.sub_state = self.create_subscription(State, "/mavros/state", self._on_state, qos_be)
-        self.sub_pose = self.create_subscription(PoseStamped, "/mavros/local_position/pose", self._on_pose, qos_be)
-        self.sub_vision_state = self.create_subscription(String, "/vision/state", self._on_vision_state, 10)
-        self.sub_line = self.create_subscription(Int32MultiArray, "/vision/line_position", self._on_line_position, 10)
-        self.sub_gancho = self.create_subscription(String, "/gancho/status", self._on_gancho_status, 10)
+        self.sub_state = self.create_subscription(State, "/mavros/state", self._on_state, qos_be, callback_group=self.callback_group)
+        self.sub_pose = self.create_subscription(PoseStamped, "/mavros/local_position/pose", self._on_pose, qos_be, callback_group=self.callback_group)
+        self.sub_vision_state = self.create_subscription(String, "/vision/state", self._on_vision_state, 10, callback_group=self.callback_group)
+        self.sub_line = self.create_subscription(Int32MultiArray, "/vision/line_position", self._on_line_position, 10, callback_group=self.callback_group)
+        self.sub_gancho = self.create_subscription(String, "/gancho/status", self._on_gancho_status, 10, callback_group=self.callback_group)
 
         # Service clients
-        self.cli_mode = self.create_client(SetMode, "/mavros/set_mode")
-        self.cli_arm = self.create_client(CommandBool, "/mavros/cmd/arming")
-        self.cli_takeoff = self.create_client(CommandTOL, "/mavros/cmd/takeoff")
-        self.cli_land = self.create_client(CommandTOL, "/mavros/cmd/land")
+        self.cli_mode = self.create_client(SetMode, "/mavros/set_mode", callback_group=self.callback_group)
+        self.cli_arm = self.create_client(CommandBool, "/mavros/cmd/arming", callback_group=self.callback_group)
+        self.cli_takeoff = self.create_client(CommandTOL, "/mavros/cmd/takeoff", callback_group=self.callback_group)
+        self.cli_land = self.create_client(CommandTOL, "/mavros/cmd/land", callback_group=self.callback_group)
 
         # Timer principal (10 Hz)
-        self.timer = self.create_timer(0.1, self._step, callback_group=self.cb_group)
+        self.timer = self.create_timer(0.1, self._step, callback_group = self.callback_group)
 
         self.get_logger().info(f"Nó de navegação iniciado. Altitude de cruzeiro: {self.ALTITUDE_CRUZEIRO:.2f} m")
 
@@ -329,28 +330,22 @@ class NavigatorNode(Node):
     # Loop principal da missão
     # ======================
     def _step(self):
-        # Pré-condições
-        #if not getattr(self.fcu_state, "connected", False) or self.pose is None:
-        #    self._log_every(3.0, "Aguardando conexão com FCU e pose...")
-        #    return
-        self.get_logger().info('Aguardando conexão com o FCU...')
-        while not getattr(self.fcu_state, "connected", False):
-            rclpy.spin_once(self, timeout_sec=5)
-        self.get_logger().info('Conexão com FCU estabelecida.')
-
-        self.get_logger().info('Aguardando leitura da posição...')
-        while self.pose is None:
-            rclpy.spin_once(self, timeout_sec=5)
-        self.get_logger().info(
-            f'Posição inicial lida: {self.current_pose.x:.2f}, {self.current_pose.y:.2f}, {self.current_pose.z:.2f}')
-        return
-
         # Se há uma chamada de serviço pendente, aguarde concluir
         if self._handle_pending():
             return
 
         # Máquina de estados
         if self.state == "INICIO":
+            # Pré-condições para iniciar a missão
+            if not getattr(self.fcu_state, "connected", False):
+                self._log_every(3.0, "Aguardando conexão com FCU...")
+                return
+            if self.pose is None:
+                self._log_every(3.0, "Aguardando leitura da pose...")
+                return
+
+            self.get_logger().info("Conexão e pose OK. Iniciando sequência de decolagem.")
+
             # Modo (ArduPilot): GUIDED. (Para PX4 seria OFFBOARD.)
             if self.fcu_state.mode != "GUIDED":
                 if self._request_set_mode("GUIDED"):
